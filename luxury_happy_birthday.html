@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 关键优化：禁止用户缩放，适配 iOS 视网膜屏幕 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>极简奢华生日 - 3D 蛋糕与手势交互</title>
+    <!-- 引入字体和图标库 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Long+Cang&family=Ma+Shan+Zheng&family=Zhi+Mang+Xing&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Cinzel', 'Ma Shan Zheng', serif;
+            color: #ffc0cb;
+            transition: background-color 1s ease;
+            user-select: none;
+            -webkit-user-select: none; /* iOS Safari 防选中 */
+            -webkit-touch-callout: none; /* iOS Safari 防长按菜单 */
+        }
+        
+        canvas {
+            display: block;
+            outline: none;
+        }
+
+        #input_video {
+            position: absolute;
+            top: 0; left: 0; opacity: 0; pointer-events: none; width: 320px; height: 240px; z-index: -1;
+        }
+
+        /* --- 启动与设置流程界面 --- */
+        #fullscreen-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px); /* iOS 兼容 */
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #D4AF37;
+            text-align: center;
+            transition: opacity 1s, transform 1s;
+        }
+
+        #step-1 h1 {
+            font-size: 6vw;
+            margin-bottom: 40px;
+            text-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
+            font-weight: 700;
+            letter-spacing: 8px;
+        }
+
+        .step-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+            width: 100%;
+            max-width: 800px;
+            transition: opacity 0.5s;
+        }
+
+        .large-btn {
+            padding: 15px 50px;
+            font-size: 1.5rem;
+            border: 2px solid #D4AF37;
+            background: rgba(0,0,0,0.5);
+            color: #D4AF37;
+            cursor: pointer;
+            font-family: 'Cinzel', serif;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            transition: all 0.3s;
+            border-radius: 50px;
+        }
+
+        .large-btn:hover {
+            background: #D4AF37;
+            color: #000;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.8);
+            transform: scale(1.05);
+        }
+
+        /* 设置界面样式 */
+        #step-3 {
+            width: 90%;
+            height: 90%;
+            display: none; /* 初始隐藏 */
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #step-3 h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #D4AF37;
+            padding-bottom: 10px;
+        }
+
+        /* 滚动容器 */
+        .scrollable-settings {
+            flex: 1;
+            width: 100%;
+            max-width: 600px;
+            overflow-y: auto;
+            padding: 20px;
+            background: rgba(20, 20, 20, 0.6);
+            border-radius: 10px;
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            margin-bottom: 20px;
+            -webkit-overflow-scrolling: touch; /* iOS 平滑滚动 */
+        }
+
+        /* 滚动条样式 */
+        .scrollable-settings::-webkit-scrollbar { width: 8px; }
+        .scrollable-settings::-webkit-scrollbar-track { background: #111; }
+        .scrollable-settings::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        .scrollable-settings::-webkit-scrollbar-thumb:hover { background: #D4AF37; }
+
+        /* --- 运行时 UI --- */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .title-input {
+            position: absolute;
+            top: 8%; 
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+            box-shadow: 0 5px 15px -5px rgba(212, 175, 55, 0.1);
+            color: #FFB6C1;
+            font-family: 'Cinzel', serif;
+            font-size: 4vw;
+            text-align: center;
+            width: 80%;
+            outline: none;
+            text-shadow: 0 0 10px rgba(255, 182, 193, 0.5);
+            pointer-events: auto;
+            margin-bottom: 0;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            opacity: 0;
+            transition: opacity 1s, border-color 0.5s; 
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            pointer-events: auto;
+            align-items: flex-end;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+        /* 顶部功能栏 */
+        #top-controls {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            display: flex;
+            gap: 15px;
+            z-index: 30;
+            pointer-events: auto;
+            opacity: 0; 
+            transition: opacity 1s;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(10, 10, 10, 0.6);
+            border: 1px solid #D4AF37;
+            color: #D4AF37;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        .icon-btn:hover {
+            background: #D4AF37;
+            color: #000;
+            transform: scale(1.1);
+        }
+
+        /* 运行时设置侧边栏容器 */
+        #runtime-settings-panel {
+            position: absolute; top: 80px; left: 30px;
+            background: rgba(10, 10, 10, 0.95); border: 1px solid #D4AF37; padding: 20px;
+            border-radius: 8px; color: #fff; display: none; 
+            flex-direction: column; gap: 15px;
+            backdrop-filter: blur(10px); 
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 30; pointer-events: auto;
+            min-width: 260px; max-height: 80vh; overflow-y: auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 通用设置组件样式 */
+        .setting-group { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+        .setting-group:last-child { border-bottom: none; }
+        .setting-group label { display: block; margin-bottom: 8px; color: #D4AF37; font-size: 12px; letter-spacing: 1px; font-weight: bold; }
+        .setting-options { display: flex; gap: 10px; }
+        .option-btn { background: #222; border: 1px solid #555; color: #ccc; padding: 8px 10px; font-size: 12px; cursor: pointer; transition: all 0.2s; flex: 1; text-align: center; border-radius: 4px; }
+        .option-btn.active { background: #D4AF37; color: #000; border-color: #D4AF37; }
+        .slider-container { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+        .slider-info { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; }
+        input[type=range] { width: 100%; accent-color: #D4AF37; cursor: pointer; }
+
+        .btn { background: rgba(20, 20, 20, 0.8); border: 1px solid #D4AF37; color: #D4AF37; padding: 12px 24px; font-family: 'Cinzel', serif; font-size: 14px; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+        .btn:hover { background: #D4AF37; color: #000; box-shadow: 0 0 15px rgba(212, 175, 55, 0.5); }
+        #file-input, #music-input { display: none; }
+        
+        #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; justify-content: center; align-items: center; z-index: 200; transition: opacity 0.5s; }
+        .spinner { width: 50px; height: 50px; border: 3px solid #333; border-top: 3px solid #D4AF37; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    
+    <!-- 依赖库 -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.7.1/gsap.min.js"></script>
+</head>
+<body>
+
+    <!-- 
+      iOS 关键兼容性修正：
+      1. playsinline: 防止视频自动全屏
+      2. webkit-playsinline: 同上，针对旧版 iOS Safari
+      3. muted: 某些 iOS 版本需要静音才能自动开始流媒体
+    -->
+    <video id="input_video" playsinline webkit-playsinline muted style="display:none"></video>
+    
+    <!-- 音频元素 -->
+    <audio id="bg-music" loop>
+        <!-- 默认音乐 (Track 1) -->
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="loader"><div class="spinner"></div></div>
+
+    <!-- 全屏流程遮罩 -->
+    <div id="fullscreen-overlay">
+        <!-- 步骤1: 启动 -->
+        <div id="step-1" class="step-container">
+            <h1>LUXURY BIRTHDAY</h1>
+            <button class="large-btn" onclick="showUploadChoice()">开始庆祝 (START)</button>
+        </div>
+        
+        <!-- 步骤2: 上传询问 -->
+        <div id="step-2" class="step-container" style="display: none;">
+            <h2 style="font-size: 2rem;">CUSTOMIZE MEMORIES</h2>
+            <p style="font-size: 1.2rem; color: #ccc;">是否需要上传照片到蛋糕中?</p>
+            <div style="display: flex; gap: 30px;">
+                <button class="large-btn" onclick="triggerInitialUpload()">是 (YES)</button>
+                <button class="large-btn" onclick="showMusicStep()">否 (NO)</button>
+            </div>
+        </div>
+
+        <!-- 步骤2.5 (新): 音乐询问 -->
+        <div id="step-music" class="step-container" style="display: none;">
+            <h2 style="font-size: 2rem;">SET ATMOSPHERE</h2>
+            <p style="font-size: 1.2rem; color: #ccc;">是否上传自定义背景音乐?</p>
+            <div style="display: flex; gap: 30px;">
+                <button class="large-btn" onclick="triggerInitialMusicUpload()">是 (YES)</button>
+                <button class="large-btn" onclick="showPreSettings()">使用预设 (NO)</button>
+            </div>
+        </div>
+
+        <!-- 步骤3: 预设参数 -->
+        <div id="step-3">
+            <h2>PRE-GAME SETTINGS</h2>
+            <div id="settings-content-wrapper" class="scrollable-settings">
+                <!-- 这里的内容会被移动到 runtime-settings-panel -->
+                <div id="reusable-settings-content">
+                    
+                    <!-- 音乐选择 (依然保留，方便后续切换) -->
+                    <div class="setting-group">
+                        <label>BACKGROUND MUSIC (背景音乐)</label>
+                        <div class="setting-options">
+                            <div class="option-btn active" onclick="setMusic(0, this)">Classic</div>
+                            <div class="option-btn" onclick="setMusic(1, this)">Elegant</div>
+                            <div class="option-btn" onclick="setMusic(2, this)">Upbeat</div>
+                        </div>
+                    </div>
+
+                    <div class="setting-group">
+                        <label>THEME (主题)</label>
+                        <div class="setting-options">
+                            <div class="option-btn active" onclick="setTheme('black', this)">BLACK GOLD</div>
+                            <div class="option-btn" onclick="setTheme('white', this)">CREAMY</div>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <label>SHAPE (形状)</label>
+                        <div class="setting-options">
+                            <div class="option-btn active" onclick="setCakeShape('cylinder', this)">ROUND</div>
+                            <div class="option-btn" onclick="setCakeShape('heart', this)">HEART</div>
+                            <div class="option-btn" onclick="setCakeShape('cube', this)">INS-CUBE</div>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <label>CAKE ADJUSTMENT</label>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>缩放 (Scale)</span><span id="val-cake-scale">1.0</span></div>
+                            <input type="range" min="0.5" max="1.5" step="0.1" value="1.0" oninput="updateCakeScale(this.value)">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>垂直位置 (Y)</span><span id="val-cake-y">0</span></div>
+                            <input type="range" min="-20" max="20" step="1" value="0" oninput="updateCakeOffsetY(this.value)">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>亮度 (Brightness)</span><span id="val-cake-brightness">1.5</span></div>
+                            <input type="range" min="0.5" max="5.0" step="0.1" value="1.5" oninput="updateCakeBrightness(this.value)">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>饱和度 (Sat)</span><span id="val-cake-sat">1.0</span></div>
+                            <input type="range" min="0.0" max="2.0" step="0.1" value="1.0" oninput="updateCakeSaturation(this.value)">
+                        </div>
+                        <!-- 新增：颜色深度/浓度调节 -->
+                        <div class="slider-container">
+                            <div class="slider-info"><span>颜色浓度 (Depth)</span><span id="val-cake-depth">1.0</span></div>
+                            <input type="range" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateCakeColorDepth(this.value)">
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <label>ATMOSPHERE</label>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>星星数量</span><span id="val-stars">200</span></div>
+                            <input type="range" min="0" max="800" step="10" value="200" oninput="updateStarSettings(this.value)">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>流星频率</span><span id="val-meteors">5</span></div>
+                            <input type="range" min="0" max="10" step="1" value="5" oninput="updateMeteorSettings('frequency', this.value)">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>流星亮度</span><span id="val-meteor-bright">2.0</span></div>
+                            <input type="range" min="0.5" max="5.0" step="0.1" value="2.0" oninput="updateMeteorSettings('brightness', this.value)">
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <label>BLESSINGS</label>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>数量</span><span id="val-count">100</span></div>
+                            <input type="range" min="100" max="400" step="10" value="100" oninput="updateTextSettings('count', this.value)">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>亮度</span><span id="val-bright">1.0</span></div>
+                            <input type="range" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateTextSettings('brightness', this.value)">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>清晰度</span><span id="val-clear">1.0</span></div>
+                            <input type="range" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateTextSettings('clarity', this.value)">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-info"><span>字体大小</span><span id="val-size">1.0</span></div>
+                            <input type="range" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateTextSettings('size', this.value)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="large-btn" onclick="startFinalCountdown()">START COUNTDOWN</button>
+        </div>
+    </div>
+
+    <!-- UI 层 (倒计时) -->
+    <div id="ui-layer">
+        <input type="text" class="title-input" value="HAPPY BIRTHDAY" placeholder="输入名字...">
+    </div>
+    
+    <!-- 顶部功能区 -->
+    <div id="top-controls">
+        <button class="icon-btn" onclick="toggleSettings()" title="设置"><i class="fas fa-cog"></i></button>
+        <button class="icon-btn" onclick="toggleMusic()" title="音乐开关"><i id="music-icon" class="fas fa-volume-mute"></i></button>
+        <button class="icon-btn" onclick="takeScreenshot()" title="拍照留念"><i class="fas fa-camera"></i></button>
+    </div>
+    
+    <!-- 运行时设置面板 (空容器) -->
+    <div id="runtime-settings-panel"></div>
+
+    <!-- 底部控制区 -->
+    <div id="controls">
+        <button class="btn" id="cam-btn" onclick="toggleCamera()">开启手势控制 (Camera)</button>
+        <button class="btn" onclick="document.getElementById('music-input').click()">上传音乐 (Music)</button>
+        <button class="btn" onclick="document.getElementById('file-input').click()">上传照片 (Upload)</button>
+        <button class="btn" onclick="toggleFullscreen()">全屏体验 (Fullscreen)</button>
+        
+        <input type="file" id="file-input" multiple accept="image/*" onchange="handleImageUpload(this)">
+        <input type="file" id="music-input" accept="audio/*" onchange="handleMusicUpload(this)">
+    </div>
+
+    <script>
+        const CONFIG = { particleCount: 2500, cakeRadiusBottom: 13, cakeRadiusMiddle: 10, cakeRadiusTop: 7, scatterRadius: 50 };
+        const CHINESE_FONTS = ["'Ma Shan Zheng', cursive", "'Zhi Mang Xing', cursive", "'Long Cang', cursive"];
+        let textSettings = { count: 100, brightness: 1.0, clarity: 1.0, size: 1.0 };
+        let textUpdateTimeout = null;
+        let starSettings = { count: 200 };
+        let starUpdateTimeout = null;
+        let meteorSettings = { frequency: 5, brightness: 2.0 };
+        const baseCakeY = -12; 
+        let matGold, matPink, matStriped;
+        const THEMES = {
+            black: { bg: 0x050505, colors: [0xFFB6C1, 0xFF69B4, 0xD4AF37, 0x333333], text: '#FFB6C1', inputBorder: 'rgba(212, 175, 55, 0.3)', bloomStrength: 0.6 },
+            white: { bg: 0xF5F5F5, colors: [0xFFB7C5, 0xFF69B4, 0xE0C097, 0xFFFFFF], text: '#FF69B4', inputBorder: 'rgba(255, 183, 197, 0.3)', bloomStrength: 0.4 }
+        };
+        let currentThemeName = 'black'; 
+        // 颜色调节变量
+        let currentSaturation = 1.0;
+        let currentColorDepth = 1.0;
+        
+        // 内置音乐列表
+        const MUSIC_TRACKS = [
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", // Classic
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", // Elegant
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"  // Upbeat
+        ];
+
+        let scene, camera, renderer, composer;
+        let particles = [];
+        let instancedMeshCubes, instancedMeshSpheres, instancedMeshCandy;
+        let instancedMeshC, instancedMeshZ, instancedMeshH;
+        let photoGroup = new THREE.Group();
+        let backgroundTextGroup = new THREE.Group(); 
+        let starGroup = new THREE.Group();
+        let meteorGroup = new THREE.Group(); 
+        let confettiGroup = new THREE.Group(); 
+        let roseGroup = new THREE.Group();
+        let cakePivot; 
+        let spotlight, ambientLight;
+        let sparklerSystem; 
+        let starMesh; 
+        let meteorPool = []; 
+        let confettiPool = []; 
+        const MODES = { COUNTDOWN: 'countdown', NORMAL: 'normal', SCATTER: 'scatter', FOCUS: 'focus' };
+        let currentMode = MODES.COUNTDOWN; 
+        let currentShape = 'cylinder';
+        let handResults = null;
+        let cameraActive = false;
+        let musicPlaying = false;
+        let countdownValue = 3;
+        let countdownTimer = null;
+        let focusTargetIndex = 0;
+        let isInitialSetup = true; 
+
+        const BLESSINGS = [
+            "生日快乐", "永远十八", "Happy Birthday", "Forever Young", "万事胜意", "心想事成", "天天开心", "平安喜乐",
+            "好运连连", "梦想成真", "万事如意", "百无禁忌", "貌美如花", "仙气飘飘", "光芒万丈", "熠熠生辉",
+            "美丽动人", "人见人爱", "花见花开", "颜值爆表", "魅力四射", "气场全开", "精致生活", "明艳动人",
+            "可盐可甜", "少女感满满", "绝代风华", "眉目舒展", "闪闪发光", "独一无二", "优雅从容", "自信放光",
+            "暴富暴瘦", "财源滚滚", "前程似锦", "多金富婆", "财貌双全", "事业有成", "日进斗金", "一本万利",
+            "星途璀璨", "功成名就", "未来可期", "步步高升", "桃花朵朵", "甜蜜满分", "被爱包围", "眼中存光",
+            "心中有爱", "所遇皆良人", "温柔坚定", "浪漫至死不渝", "自由自在", "清醒独立", "无惧岁月", "自在如风",
+            "热辣滚烫", "向阳而生", "野蛮生长", "保持热爱", "奔赴山海", "不负韶华", "长乐未央", "乘风破浪",
+            "快乐至上", "无忧无虑", "不卑不亢", "此生尽兴", "赤诚善良", "万物可爱", "美好如初", "星河长明",
+            "一路生花", "所得皆愿", "岁岁欢愉", "年年胜意", "来日方长", "何其有幸", "共祝未来", "锦绣前程",
+            "一帆风顺", "四季平安", "好运常伴", "喜乐安康"
+        ];
+        const TEXT_COLORS = [ "#FFD700", "#FFC0CB", "#FF007F", "#FFA500", "#9370DB", "#FFFF00", "#FC5A8D" ];
+        
+        // --- 核心流程控制 ---
+        function showUploadChoice() {
+            document.getElementById('step-1').style.display = 'none';
+            document.getElementById('step-2').style.display = 'flex';
+        }
+
+        function triggerInitialUpload() {
+            document.getElementById('file-input').click();
+            // 上传完成后会自动调用 showMusicStep (在 handleImageUpload 中)
+        }
+
+        // 新增：音乐选择步骤显示
+        function showMusicStep() {
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-music').style.display = 'flex';
+        }
+
+        // 新增：触发音乐上传
+        function triggerInitialMusicUpload() {
+            document.getElementById('music-input').click();
+        }
+
+        function showPreSettings() {
+            document.getElementById('step-2').style.display = 'none'; // 确保步骤2关闭
+            document.getElementById('step-music').style.display = 'none'; // 关闭音乐步骤
+            document.getElementById('step-3').style.display = 'flex';
+        }
+
+        function startFinalCountdown() {
+            isInitialSetup = false;
+            // 移动设置内容到左侧面板
+            const settingsContent = document.getElementById('reusable-settings-content');
+            document.getElementById('runtime-settings-panel').appendChild(settingsContent);
+            
+            // 隐藏遮罩
+            const overlay = document.getElementById('fullscreen-overlay');
+            overlay.style.opacity = 0;
+            setTimeout(() => overlay.remove(), 1000);
+
+            // 确保播放音乐
+            const audio = document.getElementById('bg-music');
+            audio.play().then(() => {
+                musicPlaying = true;
+                document.getElementById('music-icon').className = 'fas fa-music';
+            }).catch(e => console.log("Audio waiting for interaction"));
+
+            startCountdownSequence();
+        }
+        
+        // --- 音乐切换 ---
+        function setMusic(index, btn) {
+            // UI 更新
+            const container = btn.parentElement;
+            for (let child of container.children) {
+                child.classList.remove('active');
+            }
+            btn.classList.add('active');
+
+            // 音频更新
+            const audio = document.getElementById('bg-music');
+            const wasPlaying = !audio.paused;
+            audio.src = MUSIC_TRACKS[index];
+            if (wasPlaying) {
+                audio.play();
+            }
+        }
+
+        // --- 3D 初始化 ---
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(THEMES.black.bg);
+            scene.fog = new THREE.FogExp2(THEMES.black.bg, 0.02);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 60); 
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            const renderScene = new THREE.RenderPass(scene, camera);
+            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+            bloomPass.threshold = 0.2; bloomPass.strength = THEMES.black.bloomStrength; bloomPass.radius = 0.5;
+
+            composer = new THREE.EffectComposer(renderer);
+            composer.addPass(renderScene);
+            composer.addPass(bloomPass);
+
+            spotlight = new THREE.SpotLight(0xffffff, 1.5);
+            spotlight.position.set(0, 60, 30); 
+            spotlight.angle = Math.PI / 5;
+            spotlight.penumbra = 1;
+            spotlight.castShadow = true;
+            scene.add(spotlight);
+
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+
+            cakePivot = new THREE.Group();
+            scene.add(cakePivot);
+
+            createParticles();
+            createSparkler();
+            createDecorations(); 
+            createBackgroundTexts(); 
+            createStarfield(); 
+            createMeteorPool();
+            createConfettiPool(); 
+            
+            cakePivot.add(photoGroup); 
+            cakePivot.add(roseGroup);
+
+            scene.add(backgroundTextGroup);
+            scene.add(starGroup);
+            scene.add(meteorGroup); 
+            scene.add(confettiGroup);
+
+            window.addEventListener('resize', onWindowResize, false);
+            
+            document.getElementById('loader').style.opacity = 0;
+            setTimeout(() => document.getElementById('loader').remove(), 500);
+
+            animate();
+            // 不再自动开始倒计时，等待用户交互
+            updateCountdownTarget(3); // 预先渲染数字3
+        }
+
+        // --- 功能函数 ---
+        function toggleMusic() {
+            const audio = document.getElementById('bg-music');
+            const icon = document.getElementById('music-icon');
+            if (musicPlaying) {
+                audio.pause();
+                icon.className = 'fas fa-volume-mute';
+                musicPlaying = false;
+            } else {
+                audio.play().then(() => {
+                    icon.className = 'fas fa-music';
+                    musicPlaying = true;
+                }).catch(e => {
+                    console.log("Audio autoplay blocked");
+                });
+            }
+        }
+
+        function handleMusicUpload(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const url = URL.createObjectURL(file);
+                const audio = document.getElementById('bg-music');
+                audio.src = url;
+                audio.play().then(() => {
+                    musicPlaying = true;
+                    document.getElementById('music-icon').className = 'fas fa-music';
+                }).catch(e => console.error(e));
+                
+                // 清除内置音乐的选择状态（视觉上）
+                const opts = document.querySelectorAll('.setting-group .option-btn');
+                
+                // 如果是在初始设置阶段
+                if (isInitialSetup) {
+                    showPreSettings();
+                }
+            }
+        }
+
+        function takeScreenshot() {
+            composer.render();
+            try {
+                const strMime = "image/png";
+                const imgData = renderer.domElement.toDataURL(strMime);
+                saveFile(imgData.replace(strMime, "image/octet-stream"), "birthday-moment.png");
+            } catch (e) {
+                console.error(e);
+                alert("截图失败，请检查浏览器权限");
+            }
+        }
+
+        function saveFile(strData, filename) {
+            const link = document.createElement('a');
+            if (typeof link.download === 'string') {
+                document.body.appendChild(link); 
+                link.download = filename;
+                link.href = strData;
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        // --- 礼花特效 (Confetti) ---
+        function createConfettiPool() {
+            const colors = [0xFFD700, 0xFF69B4, 0x00FFFF, 0xFF4500, 0xFFFFFF];
+            const geometry = new THREE.PlaneGeometry(0.4, 0.2); 
+            for (let i = 0; i < 300; i++) {
+                const material = new THREE.MeshBasicMaterial({ color: colors[Math.floor(Math.random() * colors.length)], side: THREE.DoubleSide });
+                const confetti = new THREE.Mesh(geometry, material);
+                confetti.visible = false;
+                confetti.userData = { velocity: new THREE.Vector3(), rotationSpeed: new THREE.Vector3() };
+                confettiGroup.add(confetti); confettiPool.push(confetti);
+            }
+        }
+
+        function triggerConfetti() {
+            confettiPool.forEach(p => {
+                p.visible = true; p.position.set(0, 20, 0); 
+                const angle = Math.random() * Math.PI * 2; const force = 0.5 + Math.random() * 1.5; const height = 0.5 + Math.random() * 1.0;
+                p.userData.velocity.set(Math.cos(angle) * force, height * force, Math.sin(angle) * force);
+                p.userData.rotationSpeed.set(Math.random() * 0.2, Math.random() * 0.2, Math.random() * 0.2);
+            });
+        }
+
+        function updateConfetti() {
+            confettiPool.forEach(p => {
+                if (!p.visible) return;
+                p.position.add(p.userData.velocity); p.rotation.x += p.userData.rotationSpeed.x; p.rotation.y += p.userData.rotationSpeed.y; p.rotation.z += p.userData.rotationSpeed.z;
+                p.userData.velocity.y -= 0.03; p.userData.velocity.x *= 0.98; p.userData.velocity.z *= 0.98;
+                if (p.position.y < -30) p.visible = false; 
+            });
+        }
+
+        // --- 其他视觉逻辑保持不变 (装饰、星星、流星等) ---
+        function createDecorations() {
+            while(roseGroup.children.length > 0){ roseGroup.remove(roseGroup.children[0]); }
+            const roseGeo = new THREE.TorusKnotGeometry(0.6, 0.2, 64, 8, 3, 5); 
+            const roseMat = new THREE.MeshStandardMaterial({ color: 0xE0115F, roughness: 0.3, metalness: 0.1, emissive: 0x330011, emissiveIntensity: 0.2 });
+            const layers = [{ y: 8, r: 13, count: 6 }, { y: 16, r: 10, count: 5 }];
+            layers.forEach(layer => {
+                for(let i=0; i<layer.count; i++) {
+                    const angle = (i / layer.count) * Math.PI * 2; const rose = new THREE.Mesh(roseGeo, roseMat);
+                    rose.position.set(Math.cos(angle) * layer.r, layer.y + 0.5, Math.sin(angle) * layer.r);
+                    rose.rotation.x = -Math.PI / 2; rose.rotation.z = Math.random() * Math.PI;
+                    roseGroup.add(rose);
+                }
+            });
+        }
+
+        function updateMeteorSettings(type, val) {
+            if (type === 'frequency') { meteorSettings.frequency = parseInt(val); document.getElementById('val-meteors').innerText = val; }
+            else if (type === 'brightness') { meteorSettings.brightness = parseFloat(val); document.getElementById('val-meteor-bright').innerText = val; }
+        }
+
+        function createMeteorPool() {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 32; const ctx = canvas.getContext('2d');
+            const grad = ctx.createLinearGradient(0, 0, 256, 0); grad.addColorStop(0.0, 'rgba(255, 255, 255, 0.0)'); grad.addColorStop(0.7, 'rgba(200, 240, 255, 0.4)'); grad.addColorStop(1.0, 'rgba(255, 255, 255, 1.0)'); 
+            ctx.fillStyle = grad; ctx.beginPath(); ctx.moveTo(256, 16); ctx.lineTo(0, 10); ctx.lineTo(0, 22); ctx.fill();
+            const texture = new THREE.CanvasTexture(canvas);
+            for(let i=0; i<150; i++) {
+                const geometry = new THREE.PlaneGeometry(25, 2.0); 
+                const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false });
+                const meteor = new THREE.Mesh(geometry, material);
+                meteor.userData = { active: false, speed: 0 };
+                meteorGroup.add(meteor); meteorPool.push(meteor);
+            }
+        }
+
+        function updateMeteors(time) {
+            if (Math.random() * 10 < meteorSettings.frequency) spawnMeteor();
+            meteorPool.forEach(m => {
+                if (m.userData.active) {
+                    m.position.add(m.userData.velocity); m.userData.life -= 0.01; 
+                    let baseOpacity = 0; if (m.userData.life > 0.8) baseOpacity = (1.0 - m.userData.life) * 5; else if (m.userData.life < 0.3) baseOpacity = m.userData.life * 3.3; else baseOpacity = 1;
+                    m.material.opacity = baseOpacity * meteorSettings.brightness;
+                    if (m.userData.life <= 0 || m.position.y < -80) { m.userData.active = false; m.material.opacity = 0; }
+                }
+            });
+        }
+
+        function spawnMeteor() {
+            const meteor = meteorPool.find(m => !m.userData.active); if (!meteor) return;
+            meteor.userData.active = true; meteor.userData.life = 1.0; meteor.material.opacity = 0;
+            const x = (Math.random() - 0.5) * 200; const y = 80 + Math.random() * 50; const z = (Math.random() - 0.5) * 100 - 50; 
+            meteor.position.set(x, y, z);
+            const scale = 0.5 + Math.random() * 1.5; meteor.scale.set(scale, 1, 1);
+            const dropAngle = (Math.random() > 0.5 ? -Math.PI * 0.25 : -Math.PI * 0.75) + (Math.random()-0.5)*0.2;
+            const speed = 0.5 + Math.random() * 1.0;
+            meteor.rotation.set(0, 0, 0); meteor.rotation.z = dropAngle;
+            meteor.userData.velocity = new THREE.Vector3(Math.cos(dropAngle) * speed, Math.sin(dropAngle) * speed, 0);
+        }
+
+        function updateStarSettings(val) {
+            starSettings.count = parseInt(val); document.getElementById('val-stars').innerText = starSettings.count;
+            if (starUpdateTimeout) clearTimeout(starUpdateTimeout); starUpdateTimeout = setTimeout(createStarfield, 200);
+        }
+
+        function createStarfield() {
+            while(starGroup.children.length > 0){ let child = starGroup.children[0]; starGroup.remove(child); if(child.material.map) child.material.map.dispose(); child.material.dispose(); }
+            const starCount = starSettings.count;
+            const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32; const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(16,16,0, 16,16,16); grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(0.4, 'rgba(255,255,220,0.8)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,32,32); const texture = new THREE.CanvasTexture(canvas);
+            for(let i=0; i<starCount; i++) {
+                const material = new THREE.SpriteMaterial({ map: texture, color: 0xffffff, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, fog: false });
+                const sprite = new THREE.Sprite(material);
+                const theta = 2 * Math.PI * Math.random(); const phi = Math.acos(2 * Math.random() - 1); const radius = 100 + Math.random() * 100; 
+                sprite.position.x = radius * Math.sin(phi) * Math.cos(theta); sprite.position.y = radius * Math.sin(phi) * Math.sin(theta); sprite.position.z = radius * Math.cos(phi);
+                const size = 1.5 + Math.random() * 1.5; sprite.scale.set(size, size, 1);
+                sprite.userData = { baseOpacity: 0.5 + Math.random() * 0.5, speed: 2 + Math.random() * 4, offset: Math.random() * 100 };
+                starGroup.add(sprite);
+            }
+        }
+
+        function updateStars(time) {
+            starGroup.children.forEach(star => {
+                const data = star.userData;
+                const flicker = Math.abs(Math.sin(time * data.speed + data.offset));
+                star.material.opacity = data.baseOpacity * (0.4 + 0.6 * flicker);
+                if (flicker > 0.95) { star.scale.setScalar(star.scale.x * 1.02); } else if (star.scale.x > 3) { star.scale.setScalar(2); }
+            });
+            starGroup.rotation.y = time * 0.02;
+        }
+
+        function updateTextSettings(key, value) {
+            textSettings[key] = parseFloat(value);
+            if (key === 'count') document.getElementById('val-count').innerText = value; else if (key === 'brightness') document.getElementById('val-bright').innerText = value; else if (key === 'clarity') document.getElementById('val-clear').innerText = value; else if (key === 'size') document.getElementById('val-size').innerText = value;
+            if (key === 'count') { if (textUpdateTimeout) clearTimeout(textUpdateTimeout); textUpdateTimeout = setTimeout(() => { adjustTextCount(); }, 300); }
+        }
+
+        function updateCakeScale(val) {
+            const scale = parseFloat(val); document.getElementById('val-cake-scale').innerText = scale.toFixed(1);
+            if (cakePivot) { cakePivot.scale.set(scale, scale, scale); }
+        }
+
+        function updateCakeOffsetY(val) {
+            const offset = parseFloat(val); document.getElementById('val-cake-y').innerText = offset;
+            if (cakePivot) { cakePivot.position.y = baseCakeY + offset; }
+        }
+
+        function updateCakeBrightness(val) {
+            const intensity = parseFloat(val); document.getElementById('val-cake-brightness').innerText = intensity.toFixed(1);
+            if (spotlight) { spotlight.intensity = intensity; }
+            if (ambientLight) { ambientLight.intensity = intensity * 0.3; }
+        }
+
+        function updateCakeSaturation(val) {
+            currentSaturation = parseFloat(val);
+            document.getElementById('val-cake-sat').innerText = currentSaturation.toFixed(1);
+            refreshParticleColors();
+        }
+
+        function updateCakeColorDepth(val) {
+            currentColorDepth = parseFloat(val);
+            document.getElementById('val-cake-depth').innerText = currentColorDepth.toFixed(1);
+            refreshParticleColors();
+        }
+        
+        function refreshParticleColors() {
+            // 金色基础
+            const baseGold = new THREE.Color(0xD4AF37);
+            const goldHSL = {}; 
+            baseGold.getHSL(goldHSL);
+            // 浓度越高，Lightness 越低 (变暗/变深)
+            matGold.color.setHSL(goldHSL.h, goldHSL.s * currentSaturation, goldHSL.l / currentColorDepth);
+
+            // 粉色基础
+            const basePink = new THREE.Color(0xFF69B4);
+            const pinkHSL = {};
+            basePink.getHSL(pinkHSL);
+            // 粉色受浓度影响：L 降低更明显
+            matPink.color.setHSL(pinkHSL.h, pinkHSL.s * currentSaturation, pinkHSL.l / currentColorDepth);
+
+            // 临时变量
+            const tempColor = new THREE.Color();
+            
+            const meshes = [instancedMeshCandy, instancedMeshC, instancedMeshZ, instancedMeshH];
+            meshes.forEach(mesh => {
+                if (!mesh) return;
+                for (let i = 0; i < mesh.count; i++) {
+                    const originalType = mesh.userData.originalColorType ? mesh.userData.originalColorType[i] : null;
+                    
+                    if (originalType === 0) { // Gold
+                        tempColor.setHSL(goldHSL.h, goldHSL.s * currentSaturation, goldHSL.l / currentColorDepth);
+                    } else if (originalType === 1) { // Pink
+                         tempColor.setHSL(pinkHSL.h, pinkHSL.s * currentSaturation, pinkHSL.l / currentColorDepth);
+                    } else { // White
+                         // 白色受饱和度影响极小，稍微受深度影响变灰
+                         tempColor.setHex(0xFFFFFF);
+                         if (currentColorDepth > 1.0) tempColor.multiplyScalar(1.0 / currentColorDepth);
+                    }
+                    mesh.setColorAt(i, tempColor);
+                }
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            });
+        }
+
+        function adjustTextCount() {
+            const current = backgroundTextGroup.children.length; const target = textSettings.count;
+            if (current < target) { for (let i = 0; i < target - current; i++) { const sprite = spawnNewSprite(true); backgroundTextGroup.add(sprite); } }
+            else if (current > target) { for (let i = 0; i < current - target; i++) { const child = backgroundTextGroup.children[0]; backgroundTextGroup.remove(child); if(child.material.map) child.material.map.dispose(); child.material.dispose(); } }
+        }
+
+        function createBackgroundTexts() {
+            const count = textSettings.count;
+            for (let i = 0; i < count; i++) { const sprite = spawnNewSprite(true); sprite.userData.life = Math.random(); backgroundTextGroup.add(sprite); }
+        }
+
+        function spawnNewSprite(isNew = false) {
+            const text = BLESSINGS[Math.floor(Math.random() * BLESSINGS.length)]; const color = TEXT_COLORS[Math.floor(Math.random() * TEXT_COLORS.length)]; const font = CHINESE_FONTS[Math.floor(Math.random() * CHINESE_FONTS.length)];
+            const angle = Math.random() * Math.PI * 2; const radius = 30 + Math.random() * 50; const x = Math.cos(angle) * radius; const z = Math.sin(angle) * radius - 10; const y = (Math.random() - 0.5) * 80;
+            let sprite; if (isNew) { const material = new THREE.SpriteMaterial({ map: null, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }); sprite = new THREE.Sprite(material); } else { return null; }
+            updateSpriteContent(sprite, text, color, font); sprite.position.set(x, y, z);
+            sprite.userData = { speedY: (Math.random() * 0.05 + 0.02) * (Math.random() > 0.5 ? 1 : -1), baseY: y, life: 0, lifeSpeed: 0.005 + Math.random() * 0.01 };
+            return sprite;
+        }
+
+        function updateSpriteContent(sprite, message, color, font) {
+            if (sprite.material.map) sprite.material.map.dispose();
+            const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = 512; canvas.height = 256;
+            ctx.font = `bold 80px ${font}, 'STXingkai', cursive`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            const clarity = textSettings.clarity; ctx.strokeStyle = "rgba(0,0,0,0.8)"; ctx.lineWidth = 3 * clarity; 
+            ctx.strokeText(message, 256, 128); ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 20 / clarity; ctx.fillText(message, 256, 128);
+            const texture = new THREE.CanvasTexture(canvas); sprite.material.map = texture;
+            const baseScale = 12; const sizeScale = textSettings.size; sprite.scale.set(baseScale * sizeScale, (baseScale/2) * sizeScale, 1);
+        }
+
+        // --- 修复: 补全缺失的 updateBackgroundTexts 函数 ---
+        function updateBackgroundTexts(time) {
+            backgroundTextGroup.children.forEach(sprite => {
+                const data = sprite.userData; 
+                data.life += data.lifeSpeed; 
+                sprite.position.y += data.speedY;
+                
+                if (data.life <= 1.0) { 
+                    const alpha = Math.sin(data.life * Math.PI); 
+                    sprite.material.opacity = alpha * textSettings.brightness; 
+                } else {
+                    const text = BLESSINGS[Math.floor(Math.random() * BLESSINGS.length)]; 
+                    const color = TEXT_COLORS[Math.floor(Math.random() * TEXT_COLORS.length)]; 
+                    const font = CHINESE_FONTS[Math.floor(Math.random() * CHINESE_FONTS.length)];
+                    updateSpriteContent(sprite, text, color, font);
+                    
+                    const angle = Math.random() * Math.PI * 2; 
+                    const radius = 30 + Math.random() * 50; 
+                    sprite.position.set(Math.cos(angle) * radius, (Math.random() - 0.5) * 80, Math.sin(angle) * radius - 10);
+                    
+                    data.life = 0; 
+                    data.baseY = sprite.position.y; 
+                    data.speedY = (Math.random() * 0.05 + 0.02) * (Math.random() > 0.5 ? 1 : -1);
+                }
+            });
+        }
+
+        function createLetterGeometry(letter) {
+            const shape = new THREE.Shape();
+            const size = 0.4;
+            if (letter === 'C') {
+                const rOut = size; const rIn = size * 0.6; const startAngle = 0.5; const endAngle = Math.PI * 1.85;
+                shape.absarc(0, 0, rOut, startAngle, endAngle, false); shape.lineTo(rIn * Math.cos(endAngle), rIn * Math.sin(endAngle));
+                shape.absarc(0, 0, rIn, endAngle, startAngle, true); shape.lineTo(rOut * Math.cos(startAngle), rOut * Math.sin(startAngle));
+            } else if (letter === 'Z') {
+                const w = size * 0.8; const h = size; const t = size * 0.3;
+                shape.moveTo(-w, h); shape.lineTo(w, h); shape.lineTo(w, h - t); shape.lineTo(-w + t*1.5, -h + t); shape.lineTo(w, -h + t); shape.lineTo(w, -h);
+                shape.lineTo(-w, -h); shape.lineTo(-w, -h + t); shape.lineTo(w - t*1.5, h - t); shape.lineTo(-w, h - t);
+            } else if (letter === 'H') {
+                const w = size * 0.8; const h = size; const t = size * 0.3;
+                shape.moveTo(-w, h); shape.lineTo(-w + t, h); shape.lineTo(-w + t, t/2); shape.lineTo(w - t, t/2); shape.lineTo(w - t, h); shape.lineTo(w, h);
+                shape.lineTo(w, -h); shape.lineTo(w - t, -h); shape.lineTo(w - t, -t/2); shape.lineTo(-w + t, -t/2); shape.lineTo(-w + t, -h); shape.lineTo(-w, -h);
+            }
+            const settings = { depth: 0.1, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2 };
+            return new THREE.ExtrudeGeometry(shape, settings);
+        }
+
+        // --- 4. 粒子与形状生成 (三层蛋糕) ---
+        function createParticles() {
+            const count = CONFIG.particleCount;
+            // 修复：使用 ceil 确保数组大小足够，防止数组越界
+            const subCount = Math.ceil(count / 6); 
+
+            matGold = new THREE.MeshStandardMaterial({ color: 0xD4AF37, roughness: 0.2, metalness: 0.9 });
+            matPink = new THREE.MeshStandardMaterial({ color: 0xFF69B4, roughness: 0.4, metalness: 0.1, emissive: 0xFF1493, emissiveIntensity: 0.2 });
+            matStriped = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.3, metalness: 0.3 });
+            const matLetter = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.3, metalness: 0.5 });
+
+            const geoCube = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+            const geoSphere = new THREE.SphereGeometry(0.3, 16, 16);
+            const geoCandy = new THREE.CylinderGeometry(0.1, 0.1, 1.5, 8);
+            const geoC = createLetterGeometry('C');
+            const geoZ = createLetterGeometry('Z');
+            const geoH = createLetterGeometry('H');
+
+            instancedMeshCubes = new THREE.InstancedMesh(geoCube, matGold, subCount);
+            instancedMeshSpheres = new THREE.InstancedMesh(geoSphere, matPink, subCount);
+            instancedMeshCandy = new THREE.InstancedMesh(geoCandy, matStriped, subCount);
+            instancedMeshC = new THREE.InstancedMesh(geoC, matLetter.clone(), subCount);
+            instancedMeshZ = new THREE.InstancedMesh(geoZ, matLetter.clone(), subCount);
+            instancedMeshH = new THREE.InstancedMesh(geoH, matLetter.clone(), subCount);
+
+            const meshes = [instancedMeshCubes, instancedMeshSpheres, instancedMeshCandy, instancedMeshC, instancedMeshZ, instancedMeshH];
+            meshes.forEach(m => {
+                m.userData.originalColorType = []; 
+                m.castShadow = true; 
+                m.receiveShadow = true;
+                cakePivot.add(m);
+            });
+
+            const dummy = new THREE.Object3D();
+            const color = new THREE.Color();
+
+            for (let i = 0; i < count; i++) {
+                let p = getCylinderPosition(); 
+                const scatterX = (Math.random() - 0.5) * CONFIG.scatterRadius * 3;
+                const scatterY = (Math.random() - 0.5) * CONFIG.scatterRadius * 2;
+                
+                const pData = {
+                    baseX: p.x, baseY: p.y, baseZ: p.z,
+                    currX: scatterX, currY: scatterY, currZ: 0,
+                    scatterX: (Math.random() - 0.5) * CONFIG.scatterRadius * 2,
+                    scatterY: (Math.random() - 0.5) * CONFIG.scatterRadius * 2 + 10,
+                    scatterZ: (Math.random() - 0.5) * CONFIG.scatterRadius * 2,
+                    countdownX: scatterX, countdownY: scatterY, countdownZ: 0,
+                    type: i % 6, 
+                    rotation: { x: Math.random()*Math.PI, y: Math.random()*Math.PI, z: Math.random()*Math.PI },
+                    speed: 0.02 + Math.random() * 0.05
+                };
+                particles.push(pData);
+                
+                const meshIndex = pData.type; 
+                const instanceIndex = Math.floor(i / 6);
+                const mesh = meshes[meshIndex];
+
+                if (mesh) {
+                    let colorType;
+                    if (meshIndex === 0) colorType = 0; // Gold (Cubes)
+                    else if (meshIndex === 1) colorType = 1; // Pink (Spheres)
+                    else if (meshIndex === 3) colorType = 1; // Pink (Letter C) - Modified
+                    else {
+                        // Candy, Z, H -> Random Mix
+                        const r = Math.random();
+                        if (r < 0.33) colorType = 0;
+                        else if (r < 0.66) colorType = 1;
+                        else colorType = 2;
+                    }
+                    
+                    // 再次检查索引边界，防止因 float 精度问题或异常情况导致越界
+                    if (instanceIndex < mesh.count) {
+                        mesh.userData.originalColorType[instanceIndex] = colorType;
+                        if (colorType === 0) color.setHex(0xD4AF37);
+                        else if (colorType === 1) color.setHex(0xFF69B4);
+                        else color.setHex(0xFFFFFF);
+                        
+                        if (mesh !== instancedMeshCubes && mesh !== instancedMeshSpheres) {
+                             mesh.setColorAt(instanceIndex, color);
+                        }
+                    }
+                }
+            }
+        }
+
+        function getCylinderPosition() {
+            const rand = Math.random();
+            let rMax, hBase;
+            if (rand < 0.4) { rMax = CONFIG.cakeRadiusBottom; hBase = 0; } 
+            else if (rand < 0.75) { rMax = CONFIG.cakeRadiusMiddle; hBase = 8; } 
+            else { rMax = CONFIG.cakeRadiusTop; hBase = 16; }
+            const r = Math.sqrt(Math.random()) * rMax; const angle = Math.random() * Math.PI * 2; const h = Math.random() * 8; 
+            return { x: r * Math.cos(angle), y: h + hBase, z: r * Math.sin(angle) };
+        }
+
+        function getHeartPosition() {
+            const t = Math.random() * Math.PI * 2; const rand = Math.random(); let scale, hBase;
+            if (rand < 0.4) { scale = 0.9; hBase = 0; } else if (rand < 0.75) { scale = 0.7; hBase = 8; } else { scale = 0.5; hBase = 16; }
+            const fillScale = Math.sqrt(Math.random());
+            let x = 16 * Math.pow(Math.sin(t), 3); let z = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+            x *= scale * fillScale; z *= scale * fillScale;
+            return { x: x, y: Math.random() * 8 + hBase, z: z };
+        }
+
+        function getCubePosition() {
+            const rand = Math.random(); let size, hBase;
+            if (rand < 0.4) { size = 20; hBase = 0; } else if (rand < 0.75) { size = 15; hBase = 8; } else { size = 10; hBase = 16; }
+            return { x: (Math.random() - 0.5) * size, y: Math.random() * 8 + hBase, z: (Math.random() - 0.5) * size };
+        }
+        
+        function updateCakeShapeTargets() {
+            for (let i = 0; i < particles.length; i++) {
+                let p; if (currentShape === 'heart') p = getHeartPosition(); else if (currentShape === 'cube') p = getCubePosition(); else p = getCylinderPosition();
+                particles[i].baseX = p.x; particles[i].baseY = p.y; particles[i].baseZ = p.z;
+            }
+        }
+
+        // --- 5. 烟花棒与星星 ---
+        function createSparkler() {
+            const starShape = new THREE.Shape(); const points = 5;
+            for (let i = 0; i < points * 2; i++) { const l = i % 2 === 1 ? 0.5 : 1.2; const a = (i / (points * 2)) * Math.PI * 2; starShape.lineTo(Math.cos(a) * l, Math.sin(a) * l); }
+            const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.2, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 1 });
+            const starMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, emissive: 0xFFD700, emissiveIntensity: 2.0, metalness: 1, roughness: 0 });
+            starMesh = new THREE.Mesh(starGeo, starMat); starMesh.visible = false; cakePivot.add(starMesh);
+
+            const sparkCount = 200; const sparkGeo = new THREE.BufferGeometry();
+            const sparkPos = new Float32Array(sparkCount * 3); const sparkLife = new Float32Array(sparkCount); const sparkVel = [];
+            for(let i=0; i<sparkCount; i++) { sparkPos[i*3] = 0; sparkPos[i*3+1] = 0; sparkPos[i*3+2] = 0; sparkLife[i] = Math.random(); sparkVel.push(new THREE.Vector3()); }
+            sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+            sparklerSystem = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ color: 0xFFD700, size: 0.5, transparent: true, blending: THREE.AdditiveBlending }));
+            sparklerSystem.userData = { life: sparkLife, velocity: sparkVel }; sparklerSystem.visible = false; cakePivot.add(sparklerSystem);
+        }
+
+        function updateSparkler(time) {
+            if (currentMode === MODES.COUNTDOWN) return;
+            let topY = 25; starMesh.position.set(0, topY, 0); starMesh.rotation.y = time; starMesh.rotation.z = Math.sin(time*5) * 0.1;
+            sparklerSystem.position.copy(starMesh.position);
+            const positions = sparklerSystem.geometry.attributes.position.array;
+            const lifes = sparklerSystem.userData.life; const vels = sparklerSystem.userData.velocity;
+            for(let i=0; i<lifes.length; i++) {
+                if (lifes[i] <= 0) {
+                    positions[i*3] = 0; positions[i*3+1] = 0; positions[i*3+2] = 0; lifes[i] = 1.0;
+                    const theta = Math.random() * Math.PI * 2; const phi = Math.random() * Math.PI; const speed = 0.2 + Math.random() * 0.3;
+                    vels[i].set(Math.cos(theta) * Math.sin(phi) * speed, Math.sin(theta) * Math.sin(phi) * speed + 0.2, Math.cos(phi) * speed);
+                } else {
+                    positions[i*3] += vels[i].x; positions[i*3+1] += vels[i].y; positions[i*3+2] += vels[i].z;
+                    vels[i].y -= 0.015; lifes[i] -= 0.02;
+                }
+            }
+            sparklerSystem.geometry.attributes.position.needsUpdate = true;
+            if(Math.random() > 0.8) { starMesh.material.emissiveIntensity = 2 + Math.random() * 2; }
+        }
+
+        // --- 6. 倒计时逻辑 ---
+        function generateNumberPoints(num) {
+            const canvas = document.createElement('canvas'); canvas.width = 200; canvas.height = 200;
+            const ctx = canvas.getContext('2d'); ctx.font = 'bold 150px Cinzel'; ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(num, 100, 100);
+            const imgData = ctx.getImageData(0, 0, 200, 200); const points = []; const step = 4;
+            for (let y = 0; y < 200; y+=step) { for (let x = 0; x < 200; x+=step) { if (imgData.data[(y * 200 + x) * 4 + 3] > 128) { points.push({ x: (x - 100) * 0.3, y: (100 - y) * 0.3 }); } } }
+            return points;
+        }
+
+        function updateCountdownTarget(num) {
+            const points = generateNumberPoints(num);
+            for(let i=0; i<particles.length; i++) {
+                const pt = points[i % points.length];
+                particles[i].countdownX = pt.x + (Math.random()-0.5)*1; particles[i].countdownY = pt.y + (Math.random()-0.5)*1; particles[i].countdownZ = (Math.random()-0.5) * 5;
+            }
+        }
+
+        function startCountdownSequence() {
+            currentMode = MODES.COUNTDOWN; countdownValue = 3; updateCountdownTarget(3); backgroundTextGroup.visible = false; 
+            const step = () => {
+                if(countdownValue > 0) {
+                    updateCountdownTarget(countdownValue); gsap.to(camera.position, { z: 50 - (3-countdownValue)*5, duration: 1 });
+                    setTimeout(() => { countdownValue--; if(countdownValue === 0) { finishCountdown(); } else { step(); } }, 1000);
+                }
+            };
+            step();
+        }
+
+        function finishCountdown() {
+            currentMode = MODES.NORMAL; starMesh.visible = true; sparklerSystem.visible = true; backgroundTextGroup.visible = true; 
+            
+            // 蛋糕下沉动画
+            gsap.to(cakePivot.position, { y: baseCakeY, duration: 2, ease: "power2.inOut" });
+
+            // 摄像机位置调整
+            gsap.to(camera.position, { x: 0, y: 5, z: 55, duration: 2, ease: "power2.inOut" });
+            
+            document.querySelector('.title-input').style.opacity = 1; 
+            document.getElementById('controls').style.opacity = 1; 
+            document.getElementById('top-controls').style.opacity = 1;
+            
+            // 触发礼花
+            triggerConfetti();
+        }
+
+        // --- 7. 主循环 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = Date.now() * 0.001;
+            
+            if (currentMode !== MODES.COUNTDOWN && cakePivot) {
+                // 在 FOCUS 模式下，照片回正，但蛋糕依然旋转
+                // 我们在 updateCameraState 里会计算目标照片的世界坐标
+                // 这里的旋转是蛋糕整体的
+                cakePivot.rotation.y += 0.003; 
+            }
+
+            // 更新照片的朝向逻辑
+            if (currentMode === MODES.FOCUS && photoGroup.children.length > 0) {
+                // 遍历所有照片更新旋转
+                photoGroup.children.forEach((photo, idx) => {
+                    if (idx === focusTargetIndex) {
+                        photo.quaternion.slerp(photo.userData.quaternionBase, 0.1);
+                    } else {
+                        photo.quaternion.slerp(photo.userData.quaternionSlanted, 0.1);
+                    }
+                });
+            } else {
+                 // 非 Focus 模式，所有照片保持倾斜
+                 photoGroup.children.forEach(photo => {
+                    if (photo.userData.quaternionSlanted) {
+                        photo.quaternion.slerp(photo.userData.quaternionSlanted, 0.1);
+                    }
+                 });
+            }
+
+            updateParticles(time);
+            updateSparkler(time);
+            
+            // 修复：现在这里调用是安全的
+            updateBackgroundTexts(time);
+            
+            updateStars(time); // 更新星星
+            updateMeteors(time); // 更新流星
+            updateConfetti(); // 更新礼花
+            updateCameraState();
+
+            photoGroup.children.forEach((photo, idx) => {
+                // 只有非 Focus 状态下才做上下浮动，避免聚焦时抖动
+                if (currentMode !== MODES.FOCUS && photo.userData.basePos) {
+                    photo.position.y = photo.userData.basePos.y + Math.sin(time * 2 + idx) * 0.1;
+                }
+            });
+
+            composer.render();
+        }
+
+        function updateParticles(time) {
+            const dummy = new THREE.Object3D();
+            const lerpFactor = 0.08;
+
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                let tx, ty, tz;
+
+                if (currentMode === MODES.COUNTDOWN) {
+                    tx = p.countdownX; ty = p.countdownY; tz = p.countdownZ;
+                } else if (currentMode === MODES.SCATTER) {
+                    tx = p.scatterX; ty = p.scatterY; tz = p.scatterZ;
+                } else if (currentMode === MODES.FOCUS) {
+                    tx = p.baseX * 1.5; ty = p.baseY; tz = p.baseZ * 1.5;
+                } else {
+                    tx = p.baseX; ty = p.baseY; tz = p.baseZ;
+                }
+
+                p.rotation.y += p.speed;
+
+                p.currX += (tx - p.currX) * lerpFactor;
+                p.currY += (ty - p.currY) * lerpFactor;
+                p.currZ += (tz - p.currZ) * lerpFactor;
+
+                dummy.position.set(p.currX, p.currY, p.currZ);
+                dummy.rotation.set(p.rotation.x, p.rotation.y + time, p.rotation.z);
+                dummy.updateMatrix();
+
+                const idx = Math.floor(i / 6);
+                
+                // 修复：添加对 idx 的边界检查
+                if (i % 6 === 0 && idx < instancedMeshCubes.count) instancedMeshCubes.setMatrixAt(idx, dummy.matrix);
+                else if (i % 6 === 1 && idx < instancedMeshSpheres.count) instancedMeshSpheres.setMatrixAt(idx, dummy.matrix);
+                else if (i % 6 === 2 && idx < instancedMeshCandy.count) instancedMeshCandy.setMatrixAt(idx, dummy.matrix);
+                else if (i % 6 === 3 && idx < instancedMeshC.count) instancedMeshC.setMatrixAt(idx, dummy.matrix);
+                else if (i % 6 === 4 && idx < instancedMeshZ.count) instancedMeshZ.setMatrixAt(idx, dummy.matrix);
+                else if (i % 6 === 5 && idx < instancedMeshH.count) instancedMeshH.setMatrixAt(idx, dummy.matrix);
+            }
+
+            instancedMeshCubes.instanceMatrix.needsUpdate = true;
+            instancedMeshSpheres.instanceMatrix.needsUpdate = true;
+            instancedMeshCandy.instanceMatrix.needsUpdate = true;
+            instancedMeshC.instanceMatrix.needsUpdate = true;
+            instancedMeshZ.instanceMatrix.needsUpdate = true;
+            instancedMeshH.instanceMatrix.needsUpdate = true;
+        }
+
+        // --- 8. UI 设置功能 ---
+        function toggleSettings() {
+            const panel = document.getElementById('runtime-settings-panel');
+            if(panel) {
+                panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+            }
+        }
+
+        function setTheme(themeName, btn) {
+            document.querySelectorAll('.setting-group:nth-child(1) .option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            currentThemeName = themeName; // 记录当前主题
+            const theme = THEMES[themeName];
+            
+            gsap.to(scene.background, { r: new THREE.Color(theme.bg).r, g: new THREE.Color(theme.bg).g, b: new THREE.Color(theme.bg).b, duration: 1 });
+            scene.fog.color.setHex(theme.bg);
+            
+            document.querySelector('.title-input').style.borderColor = theme.inputBorder;
+            document.querySelector('.title-input').style.color = theme.text;
+            
+            // 如果不在聚焦模式，应用主题的辉光强度
+            if (currentMode !== MODES.FOCUS) {
+                composer.passes[1].strength = theme.bloomStrength;
+            }
+        }
+
+        function setCakeShape(shape, btn) {
+            document.querySelectorAll('.setting-group:nth-child(2) .option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            currentShape = shape;
+            updateCakeShapeTargets();
+            
+            particles.forEach(p => {
+                p.currX += (Math.random()-0.5) * 5;
+                p.currY += (Math.random()-0.5) * 5;
+            });
+        }
+
+        // --- 辅助功能 ---
+        function handleImageUpload(input) {
+            if (!input.files || input.files.length === 0) return;
+            const files = Array.from(input.files);
+            
+            // 如果是在初始设置阶段上传
+            if (isInitialSetup) {
+                showMusicStep(); // 【关键修改】：上传照片后跳转到音乐选择
+            }
+
+            // 【优化】：动态尺寸计算逻辑
+            // 1. 获取照片数量
+            const count = files.length;
+            
+            // 2. 基于蛋糕大小设定基准尺寸 (蛋糕底部半径约为13)
+            let baseSize = CONFIG.cakeRadiusBottom * 0.28; //稍微调大一点基准 (0.25 -> 0.28)
+
+            // 3. 根据数量调整缩放比例 (改为非叠加逻辑，且调大比例)
+            if (count <= 5) {
+                // 1-5张：保持基准偏大，突出重点
+                baseSize *= 1.0; 
+            } else if (count <= 12) {
+                // 6-12张：稍微缩小，保持平衡 (原本是叠加导致很小，现在固定为 0.85)
+                baseSize *= 0.85; 
+            } else if (count <= 20) {
+                // 13-20张：适度缩小 (0.75) - 之前叠加后只有 0.48，现在提升了近 60% 的大小
+                baseSize *= 0.75; 
+            } else {
+                // 20张以上：群像展示 (0.6) - 之前叠加后只有 0.24，现在提升了一倍多
+                baseSize *= 0.6; 
+            }
+
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const texture = new THREE.Texture(img);
+                        texture.needsUpdate = true;
+                        
+                        const aspect = img.width / img.height;
+                        
+                        // 应用动态计算出的尺寸
+                        let w = baseSize;
+                        let h = baseSize / aspect;
+                        
+                        // 限制最大高度
+                        const maxHeight = baseSize * 1.6; // 稍微放宽高度限制
+                        if (h > maxHeight) { 
+                            h = maxHeight; 
+                            w = h * aspect; 
+                        }
+                        
+                        // 1. 创建亮金色相框
+                        const borderThickness = baseSize * 0.06; // 边框稍微变细一点，让画面更大
+                        const frameGeo = new THREE.BoxGeometry(w + borderThickness, h + borderThickness, 0.15);
+                        const matFrame = new THREE.MeshStandardMaterial({ 
+                            color: 0xFFD700, roughness: 0.05, metalness: 1.0, emissive: 0x443300, emissiveIntensity: 0.2
+                        });
+                        const mesh = new THREE.Mesh(frameGeo, matFrame);
+
+                        // 【调整】：恢复浓郁暖金氛围光晕 (Rich Warm Golden Rim)
+                        const glowPadding = baseSize * 0.05; 
+                        const glowGeo = new THREE.PlaneGeometry(w + glowPadding + borderThickness, h + glowPadding + borderThickness);
+                        const matGlow = new THREE.MeshStandardMaterial({ 
+                            color: 0x000000,
+                            emissive: 0xFFaa33,     // 恢复为浓郁的暖金橙色
+                            emissiveIntensity: 2.0, // 提高强度，确保辉光明显且“浓郁”
+                            roughness: 1.0
+                        });
+                        const glowMesh = new THREE.Mesh(glowGeo, matGlow);
+                        glowMesh.position.z = 0.079; 
+                        mesh.add(glowMesh);
+
+                        // 2. 创建照片本体
+                        const photoGeo = new THREE.PlaneGeometry(w, h);
+                        
+                        // 保持照片的高清与质感设置 (Standard Material + 适度粗糙)
+                        const matPhoto = new THREE.MeshStandardMaterial({ 
+                            map: texture, 
+                            color: 0xffffff,
+                            roughness: 0.6,       
+                            metalness: 0.0,
+                            emissive: 0xffffff,   
+                            emissiveMap: texture, 
+                            emissiveIntensity: 0.2 
+                        }); 
+                        
+                        const photoMesh = new THREE.Mesh(photoGeo, matPhoto);
+                        photoMesh.position.z = 0.08; 
+                        mesh.add(photoMesh);
+
+                        // 4. 定位与旋转 (优化分布：体积渗透分布)
+                        // 【优化】：解决遮挡问题，让照片与蛋糕模型融合
+                        
+                        const phi = Math.PI * (3 - Math.sqrt(5)); // 黄金角
+                        const theta = index * phi; 
+                        
+                        // 高度 Y：均匀分布 (覆盖蛋糕主体 0-24 的高度范围)
+                        const minY = 3;
+                        const maxY = 23;
+                        const progress = files.length > 1 ? index / (files.length - 1) : 0.5;
+                        const y = minY + progress * (maxY - minY);
+
+                        // 【关键逻辑】：计算当前高度对应的蛋糕主体半径
+                        // 蛋糕由三层粒子组成：0-8(R13), 8-16(R10), 16+(R7)
+                        let currentTierRadius;
+                        if (y < 8) {
+                            currentTierRadius = CONFIG.cakeRadiusBottom; // 13
+                        } else if (y < 16) {
+                            currentTierRadius = CONFIG.cakeRadiusMiddle; // 10
+                        } else {
+                            currentTierRadius = CONFIG.cakeRadiusTop;    // 7
+                        }
+
+                        // 【关键逻辑】：深度随机化 (Depth Randomization)
+                        // 不再让所有照片都排在外部，而是随机分布在“蛋糕体内”到“微微悬浮”之间
+                        // 范围：0.65 (深插内部) ~ 1.15 (外部悬浮)
+                        // 使用 index 相关的伪随机数，保证布局固定不闪烁
+                        const pseudoRandom = Math.sin(index * 999.9); // -1 ~ 1
+                        // 归一化到 0 ~ 1，然后映射到 0.65 ~ 1.15
+                        const depthScale = 0.65 + ((pseudoRandom + 1) / 2) * 0.5;
+                        
+                        const r = currentTierRadius * depthScale;
+
+                        // 保存基础位置到 userData
+                        mesh.position.set(Math.cos(theta) * r, y, Math.sin(theta) * r);
+                        mesh.userData.basePos = mesh.position.clone();
+
+                        // 朝向控制
+                        mesh.lookAt(0, mesh.position.y, 0);
+                        mesh.rotateY(Math.PI); 
+                        
+                        // 增加随意的倾斜角度，模拟“插在蛋糕上”的感觉
+                        mesh.rotateX((Math.random() - 0.5) * 0.4); 
+                        mesh.rotateZ((Math.random() - 0.5) * 0.2);
+                        
+                        const baseQ = mesh.quaternion.clone();
+                        const slantedQ = mesh.quaternion.clone();
+
+                        mesh.userData.isPhoto = true;
+                        mesh.userData.id = index;
+                        mesh.userData.quaternionBase = baseQ;
+                        mesh.userData.quaternionSlanted = slantedQ;
+                        
+                        photoGroup.add(mesh);
+                        gsap.from(mesh.scale, { x: 0, y: 0, z: 0, duration: 1, ease: "back.out(1.7)" });
+                    };
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updateCameraState() {
+            if (currentMode === MODES.FOCUS && photoGroup.children.length > 0) {
+                const targetPhoto = photoGroup.children[focusTargetIndex];
+                
+                const targetWorldPos = new THREE.Vector3();
+                targetPhoto.getWorldPosition(targetWorldPos);
+                
+                const direction = new THREE.Vector3(targetWorldPos.x, 0, targetWorldPos.z).normalize();
+                
+                // 【优化】：拉近距离
+                // 将距离倍数从 8 减小到 5.5，让观察距离更近
+                const camOffset = direction.multiplyScalar(5.5); 
+                const camDest = new THREE.Vector3().copy(targetWorldPos).add(camOffset);
+                
+                // 【优化】：微调高度，视线稍微放平，更适合看照片细节
+                camDest.y += 1.0; 
+                
+                camera.position.lerp(camDest, 0.05);
+                camera.lookAt(targetWorldPos);
+            } else if (currentMode !== MODES.COUNTDOWN) {
+                // Adjust default view to be further and centred lower
+                const defaultPos = new THREE.Vector3(0, 5, 55); 
+                camera.position.lerp(defaultPos, 0.05);
+                camera.lookAt(0, 0, 0); 
+            }
+        }
+
+        function toggleCamera() {
+            if (!cameraActive) {
+                startMediaPipe();
+                cameraActive = true;
+                document.getElementById('cam-btn').innerText = "关闭摄像头";
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        function startMediaPipe() {
+            const videoElement = document.getElementById('input_video');
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+            hands.onResults(onHandsResults);
+            const cameraUtils = new Camera(videoElement, { onFrame: async () => { await hands.send({image: videoElement}); }, width: 320, height: 240 });
+            cameraUtils.start();
+        }
+
+        function onHandsResults(results) {
+            if (currentMode === MODES.COUNTDOWN) return;
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                detectGesture(results.multiHandLandmarks[0]);
+            } else {
+                setMode(MODES.NORMAL);
+            }
+        }
+
+        function detectGesture(landmarks) {
+            const thumbTip = landmarks[4];
+            const indexTip = landmarks[8];
+            const distance = Math.sqrt(Math.pow(thumbTip.x - indexTip.x, 2) + Math.pow(thumbTip.y - indexTip.y, 2));
+            const wrist = landmarks[0];
+            const tips = [8, 12, 16, 20];
+            let allExtended = true;
+            for (let i of tips) {
+                const distToWrist = Math.sqrt(Math.pow(landmarks[i].x - wrist.x, 2) + Math.pow(landmarks[i].y - wrist.y, 2));
+                if (distToWrist < 0.2) allExtended = false;
+            }
+            if (distance < 0.05) setMode(MODES.FOCUS);
+            else if (allExtended && distance > 0.1) setMode(MODES.SCATTER);
+            else setMode(MODES.NORMAL);
+        }
+
+        function setMode(mode) {
+            if (currentMode === mode || currentMode === MODES.COUNTDOWN) return;
+            
+            // 【优化】：模式切换时的照片缩放逻辑
+            if (mode === MODES.FOCUS) {
+                // 进入聚焦模式：选中一张照片并放大
+                if (photoGroup.children.length > 0) {
+                    // 如果从 Normal 进来，随机选一张；如果已经是 Focus 就不变（防止抖动）
+                    if (currentMode !== MODES.FOCUS) {
+                        focusTargetIndex = Math.floor(Math.random() * photoGroup.children.length);
+                    }
+                    
+                    const targetPhoto = photoGroup.children[focusTargetIndex];
+                    
+                    // 使用 GSAP 动画将目标照片放大 1.6 倍
+                    gsap.to(targetPhoto.scale, { x: 1.6, y: 1.6, z: 1.6, duration: 0.6, ease: "back.out(1.2)" });
+                }
+                
+                // 灯光聚焦效果
+                gsap.to(spotlight, { intensity: 2, angle: Math.PI/8, duration: 0.5 });
+                // 降低背景辉光，让照片更清晰
+                gsap.to(composer.passes[1], { strength: 0.2, duration: 1 });
+
+            } else {
+                // 退出聚焦模式（进入 Normal 或 Scatter）：所有照片恢复原始大小
+                photoGroup.children.forEach(photo => {
+                    gsap.to(photo.scale, { x: 1, y: 1, z: 1, duration: 0.5 });
+                });
+
+                // 恢复灯光和辉光
+                const themeBloom = THEMES[currentThemeName].bloomStrength;
+                gsap.to(composer.passes[1], { strength: themeBloom, duration: 1 });
+
+                if (mode === MODES.SCATTER) {
+                    gsap.to(spotlight, { intensity: 3, angle: Math.PI/3, duration: 0.5 });
+                } else {
+                    gsap.to(spotlight, { intensity: 1.5, angle: Math.PI/6, duration: 0.5 });
+                }
+            }
+            
+            currentMode = mode;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        initThree();
+    </script>
+</body>
+</html>

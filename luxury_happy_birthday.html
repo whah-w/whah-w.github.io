@@ -232,7 +232,7 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
     
-    <!-- 关键修复：确保 Three.js 核心库在最前面加载，并使用同一 CDN 源 -->
+    <!-- 确保 Three.js 核心库在最前面加载 -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
     
     <!-- MediaPipe 库 -->
@@ -254,7 +254,7 @@
 
     <video id="input_video" playsinline webkit-playsinline muted style="display:none"></video>
     
-    <!-- 修复：预加载，移除 source 子标签，完全用 JS 控制 src -->
+    <!-- 修复：移除 source，设置 preload -->
     <audio id="bg-music" loop preload="auto"></audio>
     
     <!-- 移出隐藏的输入框，放在 body 层级 -->
@@ -266,7 +266,7 @@
     <div id="fullscreen-overlay">
         <div id="step-1" class="step-container">
             <h1>LUXURY BIRTHDAY</h1>
-            <button class="large-btn" onclick="showUploadChoice()">开始庆祝 (START)</button>
+            <button class="large-btn" onclick="unlockAudioAndStart()">开始庆祝 (START)</button>
         </div>
         
         <div id="step-2" class="step-container" style="display: none;">
@@ -434,13 +434,13 @@
         let currentColorDepth = 1.0;
         let showBlessings = true;
         
-        // 5 首生日庆祝主题背景音乐
+        // 【关键修复】：更换为 SoundHelix 标准测试音频，确保兼容性
         const MUSIC_TRACKS = [
-            "https://assets.mixkit.co/music/preview/mixkit-happy-birthday-classic-version-292.mp3", 
-            "https://assets.mixkit.co/music/preview/mixkit-beautiful-dream-493.mp3",             
-            "https://assets.mixkit.co/music/preview/mixkit-feeling-happy-5.mp3",                 
-            "https://assets.mixkit.co/music/preview/mixkit-gentle-romance-292.mp3",               
-            "https://assets.mixkit.co/music/preview/mixkit-dance-with-me-3.mp3"                  
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", 
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", 
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3",
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3"
         ];
 
         let scene, camera, renderer, composer;
@@ -496,28 +496,39 @@
         function triggerInitialMusicUpload() { document.getElementById('music-input').click(); }
         function showPreSettings() { document.getElementById('step-2').style.display = 'none'; document.getElementById('step-music').style.display = 'none'; document.getElementById('step-3').style.display = 'flex'; }
         
-        // 修复：稳健的播放函数
-        async function playAudioSafe(audio) {
-            try {
-                // 如果没有源，先设置
-                if (!audio.src || audio.src === window.location.href) {
-                     audio.src = MUSIC_TRACKS[0];
-                }
-                // 重要：在某些浏览器中切换源需要显式 load
-                // 但如果正在播放，load 会中断，所以加个判断
-                if (audio.error) {
-                    audio.load();
-                }
-
-                await audio.play();
-                musicPlaying = true;
-                document.getElementById('music-icon').className = 'fas fa-music';
-            } catch (err) {
-                // 忽略 AbortError，因为这是我们快速切换时预期的行为
-                if (err.name !== 'AbortError') {
-                     console.warn("Audio playback prevented:", err);
-                }
+        // 修复：稳健的播放函数，处理 AbortError，并加入 playPromise 锁
+        let playPromise = undefined;
+        function playAudioSafe(audio) {
+             // 如果没有源，先设置
+            if (!audio.src || audio.src === window.location.href) {
+                 audio.src = MUSIC_TRACKS[0];
             }
+            
+            playPromise = audio.play();
+
+            if (playPromise !== undefined) {
+                playPromise.then(_ => {
+                    musicPlaying = true;
+                    document.getElementById('music-icon').className = 'fas fa-music';
+                }).catch(error => {
+                    if (error.name !== 'AbortError') {
+                        console.warn("Audio playback prevented:", error);
+                    }
+                    musicPlaying = false;
+                    document.getElementById('music-icon').className = 'fas fa-volume-mute';
+                });
+            }
+        }
+        
+        function unlockAudioAndStart() {
+             const audio = document.getElementById('bg-music');
+             // 强制设置 src，避免空源
+             if (!audio.src) audio.src = MUSIC_TRACKS[0];
+             
+             // 用户手势触发播放
+             playAudioSafe(audio);
+             
+             showUploadChoice();
         }
 
         function startFinalCountdown() {
@@ -528,8 +539,9 @@
             overlay.style.opacity = 0;
             setTimeout(() => overlay.remove(), 1000);
             
+            // 二次确认播放
             const audio = document.getElementById('bg-music');
-            playAudioSafe(audio);
+            if (audio.paused) playAudioSafe(audio);
             
             startCountdownSequence();
         }
@@ -548,7 +560,8 @@
             
             const audio = document.getElementById('bg-music');
             audio.src = MUSIC_TRACKS[index];
-            // 切换源后显式调用播放，因为自动播放策略可能需要重新验证
+            // 切换源后强制加载，解决 NotSupportedError
+            audio.load();
             playAudioSafe(audio);
         }
         
@@ -619,9 +632,9 @@
             document.getElementById('loader').style.opacity = 0;
             setTimeout(() => document.getElementById('loader').remove(), 500);
 
-            // 初始化音频
+            // 初始化音频源，但不播放，等待用户交互
             const audio = document.getElementById('bg-music');
-            if (audio) {
+            if (audio && !audio.src) {
                 audio.src = MUSIC_TRACKS[0];
             }
 
@@ -652,6 +665,7 @@
                 const icon = document.getElementById('music-icon');
                 
                 audio.src = url;
+                audio.load();
                 playAudioSafe(audio);
                 
                 if (isInitialSetup) { showPreSettings(); }
@@ -779,6 +793,7 @@
             });
             starGroup.rotation.y = time * 0.02;
         }
+        // ... (设置相关 updateTextSettings, updateCakeScale 等保持不变) ...
         function updateTextSettings(key, value) {
             textSettings[key] = parseFloat(value);
             if (key === 'count') document.getElementById('val-count').innerText = value; else if (key === 'brightness') document.getElementById('val-bright').innerText = value; else if (key === 'clarity') document.getElementById('val-clear').innerText = value; else if (key === 'size') document.getElementById('val-size').innerText = value;
